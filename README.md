@@ -1,8 +1,8 @@
-# django-app-gtfs
+# Django App for GTFS
 
 ![Django](https://img.shields.io/badge/Django-5.2-blue)
 
-App de Django para gestión de modelos y utilidades de GTFS para uso en Databús e Infobús
+Django app for managing GTFS models and utilities for use in Databús and Infobús
 
 ```python
 # settings.py
@@ -13,4 +13,4 @@ INSTALLED_APPS = [
 ```
 
 > [!IMPORTANT]
-> La app utiliza [llaves primarias compuestas](https://docs.djangoproject.com/en/5.2/topics/composite-primary-key/) en los modelos, disponibles desde Django 5.2.
+> The app uses composite primary keys in the models, available since Django 5.2.
