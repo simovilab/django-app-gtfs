@@ -212,10 +212,16 @@ class Stop(models.Model):
         max_length=255, blank=True, help_text="Código de la plataforma."
     )
     shelter = models.BooleanField(blank=True, null=True, help_text="Con techo.")
-    bench = models.BooleanField(blank=True, null=True, help_text="Con banco para sentarse.")
+    bench = models.BooleanField(
+        blank=True, null=True, help_text="Con banco para sentarse."
+    )
     lit = models.BooleanField(blank=True, null=True, help_text="Con iluminación.")
     bay = models.BooleanField(blank=True, null=True, help_text="Con bahía para el bus.")
-    device_charging_station = models.BooleanField(blank=True, null=True, help_text="Con estación de carga de dispositivos móviles.")
+    device_charging_station = models.BooleanField(
+        blank=True,
+        null=True,
+        help_text="Con estación de carga de dispositivos móviles.",
+    )
 
     class Meta:
         constraints = [

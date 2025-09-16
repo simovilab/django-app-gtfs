@@ -14,7 +14,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"
 django.setup()
 
 from datetime import datetime
-from django.db.models import DateField, IntegerField, FloatField, DecimalField, ForeignKey
+from django.db.models import (
+    DateField,
+    IntegerField,
+    FloatField,
+    DecimalField,
+    ForeignKey,
+)
 from django.apps import apps
 from gtfs.models import *
 
@@ -53,8 +59,8 @@ tab_to_model_mapping = {
     "fare_attributes": ("gtfs.fareattribute", model_field_mapping["fareattribute"]),
     "fare_rules": ("gtfs.farerule", model_field_mapping["farerule"]),
     "shapes": ("gtfs.shape", model_field_mapping["shape"]),
-    "trips": ("gtfs.trip", model_field_mapping["trip"]),\
-    'GEOSHAPES': ('gtfs.geoshape', model_field_mapping['geoshape']),
+    "trips": ("gtfs.trip", model_field_mapping["trip"]),
+    "GEOSHAPES": ("gtfs.geoshape", model_field_mapping["geoshape"]),
 }
 
 
@@ -63,13 +69,13 @@ xls = pd.ExcelFile(excel_file_path)
 
 # Maximum number of rows to process from each sheet
 # Set to None to process all rows (used for debugging)
-max_rows_per_sheet = ''
+max_rows_per_sheet = ""
 
 # Initialize an empty list for fixtures
 fixtures = []
 
 # Initialize a counter for primary keys
-#pk_counter = 2  # Start at 2 to avoid conflicts with the existing fixtures
+# pk_counter = 2  # Start at 2 to avoid conflicts with the existing fixtures
 
 # Process each sheet in the Excel file
 for sheet_name in xls.sheet_names:
@@ -99,7 +105,7 @@ for sheet_name in xls.sheet_names:
                 field_value = row.get(field, None)
 
                 # Convert NaN to None
-                if pd.isna(field_value) or field_value == '':
+                if pd.isna(field_value) or field_value == "":
                     field_value = None
 
                 if isinstance(field_type, DateField):
@@ -113,15 +119,17 @@ for sheet_name in xls.sheet_names:
                 elif field_type.get_internal_type() == "PointField":
                     # Convert the string to a Point object
                     if field_value or field_value != "":
-                        #point_str = field_value.split('POINT (')[1].strip(')')
-                        #longitude, latitude = map(float, point_str.split())
-                        #fields_data[field] = (longitude,latitude)
+                        # point_str = field_value.split('POINT (')[1].strip(')')
+                        # longitude, latitude = map(float, point_str.split())
+                        # fields_data[field] = (longitude,latitude)
                         fields_data[field] = field_value
                     else:
                         fields_data[field] = None
                 elif field_type.get_internal_type() == "IntegerField":
                     # Convert the string to an integer
-                    fields_data[field] = int(field_value) if field_value is not None else None
+                    fields_data[field] = (
+                        int(field_value) if field_value is not None else None
+                    )
                 elif field_type.get_internal_type() == "FloatField":
                     # Convert the string to a float
                     fields_data[field] = float(field_value) if field_value else None
@@ -135,22 +143,32 @@ for sheet_name in xls.sheet_names:
                     # Convert the string to a time object
                     if field_value:
                         try:
-                            fields_data[field] = datetime.strptime(str(field_value), "%H:%M:%S").time().isoformat()
+                            fields_data[field] = (
+                                datetime.strptime(str(field_value), "%H:%M:%S")
+                                .time()
+                                .isoformat()
+                            )
                         except ValueError:
-                            fields_data[field] = datetime.strptime(str(field_value), "%H:%M:%S.%f").time().isoformat()
+                            fields_data[field] = (
+                                datetime.strptime(str(field_value), "%H:%M:%S.%f")
+                                .time()
+                                .isoformat()
+                            )
                     else:
                         fields_data[field] = None
                 elif isinstance(field_type, ForeignKey):
                     # Handle ForeignKey fields
                     related_model_name = field_type.related_model._meta.model_name
                     related_pk = row.get(f"{field}_id", None)
-                    fields_data[field] = related_pk if related_pk else 1  # Default to 1 if no related_pk
-                #elif field_type.get_internal_type() == "ForeignKey":
-                    # Get the related model name
+                    fields_data[field] = (
+                        related_pk if related_pk else 1
+                    )  # Default to 1 if no related_pk
+                # elif field_type.get_internal_type() == "ForeignKey":
+                # Get the related model name
                 #    related_model_name = field_type.related_model._meta.model_name
-                    # Get the related model's primary key
+                # Get the related model's primary key
                 #    related_pk = row.get(f"{field}_id", None)
-                    # Set the field value to the related model's primary key
+                # Set the field value to the related model's primary key
                 #    fields_data[field] = related_pk
                 else:
                     # Set the field value to the row's value
@@ -180,14 +198,19 @@ for sheet_name in xls.sheet_names:
                 elif shape_id == "hacia_educacion":
                     fields_data["geoshape"] = 6
 
-            #if "parent_station" in model_fields and fields_data.get("parent_station") is None:
+            # if "parent_station" in model_fields and fields_data.get("parent_station") is None:
             #    fields_data["parent_station"] = "Estacion Principal"  # or some default value
-            #if "stop_timezone" in model_fields and fields_data.get("stop_timezone") is None:
+            # if "stop_timezone" in model_fields and fields_data.get("stop_timezone") is None:
             #    fields_data["stop_timezone"] = ""  # or some default value
 
             # Ensure all other fields are not null
             for key in fields_data:
-                if fields_data[key] is None and not isinstance(model_class._meta.get_field(key), IntegerField) and not isinstance(model_class._meta.get_field(key), FloatField) and not isinstance(model_class._meta.get_field(key), DecimalField):
+                if (
+                    fields_data[key] is None
+                    and not isinstance(model_class._meta.get_field(key), IntegerField)
+                    and not isinstance(model_class._meta.get_field(key), FloatField)
+                    and not isinstance(model_class._meta.get_field(key), DecimalField)
+                ):
                     fields_data[key] = ""
 
             fixture = {"model": model_name, "pk": pk_counter, "fields": fields_data}

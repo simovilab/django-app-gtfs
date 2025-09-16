@@ -907,22 +907,24 @@ csv_reader = csv.DictReader(csv_data.splitlines())
 # Convert CSV to a structured JSON format
 json_data = []
 for i, row in enumerate(csv_reader, start=1):
-    json_data.append({
-        "model": "gtfs.Shape",
-        "pk": i,
-        "fields": {
-            "feed": '1234',
-            "shape_id": row['shape_id'],
-            "shape_pt_lat": row['shape_pt_lat'],
-            "shape_pt_lon": row['shape_pt_lon'],
-            "shape_pt_sequence": row['shape_pt_sequence'],
-            "shape_dist_traveled": row['shape_dist_traveled']
+    json_data.append(
+        {
+            "model": "gtfs.Shape",
+            "pk": i,
+            "fields": {
+                "feed": "1234",
+                "shape_id": row["shape_id"],
+                "shape_pt_lat": row["shape_pt_lat"],
+                "shape_pt_lon": row["shape_pt_lon"],
+                "shape_pt_sequence": row["shape_pt_sequence"],
+                "shape_dist_traveled": row["shape_dist_traveled"],
+            },
         }
-    })
+    )
 
 # Convert the structured data into JSON format
 json_output = json.dumps(json_data, indent=4)
 
 # Save the output in .json file
-with open('shapes.json', 'w',encoding='utf-8') as json_file:
+with open("shapes.json", "w", encoding="utf-8") as json_file:
     json.dump(json_data, json_file, ensure_ascii=False, indent=4)
