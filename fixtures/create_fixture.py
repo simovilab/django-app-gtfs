@@ -5,7 +5,7 @@ import os
 import django
 
 # Set the DJANGO_SETTINGS_MODULE environment variable
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "datahub.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "infobus.settings")
 
 # Add the project directory to the sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
