@@ -1,67 +1,4 @@
-import re
-from django.db.models import UniqueConstraint
-from django.core.exceptions import ValidationError
 from django.contrib.gis.db import models
-from django.contrib.gis.geos import Point
-
-
-def validate_no_spaces_or_special_symbols(value):
-    if re.search(r"[^a-zA-Z0-9_]", value):
-        raise ValidationError(
-            "Este campo no puede contener espacios ni símbolos especiales, solamente letras, números y guiones bajos."
-        )
-
-
-class GTFSProvider(models.Model):
-    """A provider provides transportation services GTFS data.
-
-    It might or might not be the same as the agency in the GTFS feed. A GTFS provider can serve multiple agencies.
-    """
-
-    provider_id = models.BigAutoField(primary_key=True)
-    code = models.CharField(
-        max_length=31,
-        help_text="Código (típicamente el acrónimo) de la empresa. No debe tener espacios ni símbolos especiales.",
-        validators=[validate_no_spaces_or_special_symbols],
-    )
-    name = models.CharField(max_length=255, help_text="Nombre de la empresa.")
-    description = models.TextField(
-        blank=True, null=True, help_text="Descripción de la institución o empresa."
-    )
-    website = models.URLField(
-        blank=True, null=True, help_text="Sitio web de la empresa."
-    )
-    schedule_url = models.URLField(
-        blank=True,
-        null=True,
-        help_text="URL del suministro (Feed) de GTFS Schedule (.zip).",
-    )
-    trip_updates_url = models.URLField(
-        blank=True,
-        null=True,
-        help_text="URL del suministro (FeedMessage) de la entidad GTFS Realtime TripUpdates (.pb).",
-    )
-    vehicle_positions_url = models.URLField(
-        blank=True,
-        null=True,
-        help_text="URL del suministro (FeedMessage) de la entidad GTFS Realtime VehiclePositions (.pb).",
-    )
-    service_alerts_url = models.URLField(
-        blank=True,
-        null=True,
-        help_text="URL del suministro (FeedMessage) de la entidad GTFS Realtime ServiceAlerts (.pb).",
-    )
-    timezone = models.CharField(
-        max_length=63,
-        help_text="Zona horaria del proveedor de datos (asume misma zona horaria para todas las agencias). Ejemplo: America/Costa_Rica.",
-    )
-    is_active = models.BooleanField(
-        default=False,
-        help_text="¿Está activo el proveedor de datos? Si no, no se importarán los datos de este proveedor.",
-    )
-
-    def __str__(self):
-        return f"{self.name} ({self.code})"
 
 
 # -------------
@@ -69,27 +6,11 @@ class GTFSProvider(models.Model):
 # -------------
 
 
-class Feed(models.Model):
-    feed_id = models.CharField(max_length=100, primary_key=True, unique=True)
-    gtfs_provider = models.ForeignKey(
-        GTFSProvider, on_delete=models.SET_NULL, blank=True, null=True
-    )
-    http_etag = models.CharField(max_length=1023, blank=True, null=True)
-    http_last_modified = models.DateTimeField(blank=True, null=True)
-    is_current = models.BooleanField(blank=True, null=True)
-    retrieved_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.feed_id
-
-
-class Agency(models.Model):
+class BaseAgency(models.Model):
     """One or more transit agencies that provide the data in this feed.
     Maps to agency.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, to_field="feed_id", on_delete=models.CASCADE)
     agency_id = models.CharField(
         max_length=255,
         blank=True,
@@ -119,34 +40,14 @@ class Agency(models.Model):
     )
 
     class Meta:
-        constraints = [
-            UniqueConstraint(fields=["feed", "agency_id"], name="unique_agency_in_feed")
-        ]
-        verbose_name = "agency"
-        verbose_name_plural = "agencies"
-
-    def __str__(self):
-        return self.agency_name
+        abstract = True
 
 
-class Stop(models.Model):
+class BaseStop(models.Model):
     """Individual locations where vehicles pick up or drop off riders.
     Maps to stops.txt in the GTFS feed.
     """
 
-    STOP_HEADING_CHOICES = (
-        ("N", "norte"),
-        ("NE", "noreste"),
-        ("E", "este"),
-        ("SE", "sureste"),
-        ("S", "sur"),
-        ("SW", "suroeste"),
-        ("W", "oeste"),
-        ("NW", "noroeste"),
-    )
-
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     stop_id = models.CharField(
         max_length=255, help_text="Identificador único de la parada."
     )
@@ -154,9 +55,6 @@ class Stop(models.Model):
         max_length=255, blank=True, null=True, help_text="Código de la parada."
     )
     stop_name = models.CharField(max_length=255, help_text="Nombre de la parada.")
-    stop_heading = models.CharField(
-        max_length=2, blank=True, null=True, choices=STOP_HEADING_CHOICES
-    )
     stop_desc = models.TextField(
         blank=True, null=True, help_text="Descripción de la parada."
     )
@@ -173,9 +71,6 @@ class Stop(models.Model):
         blank=True,
         null=True,
         help_text="Longitud de la parada.",
-    )
-    stop_point = models.PointField(
-        blank=True, null=True, help_text="Punto georreferenciado de la parada."
     )
     zone_id = models.CharField(
         max_length=255,
@@ -211,50 +106,20 @@ class Stop(models.Model):
     platform_code = models.CharField(
         max_length=255, blank=True, help_text="Código de la plataforma."
     )
-    shelter = models.BooleanField(blank=True, null=True, help_text="Con techo.")
-    bench = models.BooleanField(
-        blank=True, null=True, help_text="Con banco para sentarse."
-    )
-    lit = models.BooleanField(blank=True, null=True, help_text="Con iluminación.")
-    bay = models.BooleanField(blank=True, null=True, help_text="Con bahía para el bus.")
-    device_charging_station = models.BooleanField(
-        blank=True,
-        null=True,
-        help_text="Con estación de carga de dispositivos móviles.",
-    )
 
     class Meta:
-        constraints = [
-            UniqueConstraint(fields=["feed", "stop_id"], name="unique_stop_in_feed")
-        ]
-
-    # Build stop_point or stop_lat and stop_lon
-    def save(self, *args, **kwargs):
-        if self.stop_point:
-            self.stop_lat = self.stop_point.y
-            self.stop_lon = self.stop_point.x
-        else:
-            self.stop_point = Point(self.stop_lon, self.stop_lat)
-        super(Stop, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.stop_id}: {self.stop_name}"
+        abstract = True
 
 
-class Route(models.Model):
+class BaseRoute(models.Model):
     """A group of trips that are displayed to riders as a single service.
     Maps to routes.txt in the GTFS feed.
-
-    _agency is a field to store the Agency object related to the route.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     route_id = models.CharField(
         max_length=255, help_text="Identificador único de la ruta."
     )
     agency_id = models.CharField(max_length=200)
-    _agency = models.ForeignKey(Agency, on_delete=models.CASCADE, blank=True, null=True)
     route_short_name = models.CharField(
         max_length=63, blank=True, null=True, help_text="Nombre corto de la ruta."
     )
@@ -296,25 +161,14 @@ class Route(models.Model):
     route_sort_order = models.PositiveIntegerField(blank=True, null=True)
 
     class Meta:
-        constraints = [
-            UniqueConstraint(fields=["feed", "route_id"], name="unique_route_in_feed")
-        ]
-
-    def save(self, *args, **kwargs):
-        self._agency = Agency.objects.get(feed=self.feed, agency_id=self.agency_id)
-        super(Route, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.route_short_name}: {self.route_long_name}"
+        abstract = True
 
 
-class Calendar(models.Model):
+class BaseCalendar(models.Model):
     """Dates for service IDs using a weekly schedule.
     Maps to calendar.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     service_id = models.CharField(
         max_length=255, help_text="Identificador único del servicio."
     )
@@ -329,28 +183,16 @@ class Calendar(models.Model):
     end_date = models.DateField(help_text="Fecha de finalización del servicio.")
 
     class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=["feed", "service_id"], name="unique_service_in_feed"
-            )
-        ]
-
-    def __str__(self):
-        return self.service_id
+        abstract = True
 
 
-class CalendarDate(models.Model):
+class BaseCalendarDate(models.Model):
     """Exceptions for the service IDs defined in the calendar.txt file.
     Maps to calendar_dates.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     service_id = models.CharField(
         max_length=255, help_text="Identificador único del servicio."
-    )
-    _service = models.ForeignKey(
-        Calendar, on_delete=models.CASCADE, blank=True, null=True
     )
     date = models.DateField(help_text="Fecha de excepción.")
     exception_type = models.PositiveIntegerField(
@@ -363,27 +205,14 @@ class CalendarDate(models.Model):
     )
 
     class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=["feed", "service_id", "date"], name="unique_date_in_feed"
-            )
-        ]
-
-    def save(self, *args, **kwargs):
-        self._service = Calendar.objects.get(feed=self.feed, service_id=self.service_id)
-        super(CalendarDate, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.holiday_name} ({self.service_id})"
+        abstract = True
 
 
-class Shape(models.Model):
+class BaseShape(models.Model):
     """Rules for drawing lines on a map to represent a transit organization's routes.
     Maps to shapes.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     shape_id = models.CharField(
         max_length=255, help_text="Identificador único de la trayectoria."
     )
@@ -409,63 +238,16 @@ class Shape(models.Model):
     )
 
     class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=["feed", "shape_id", "shape_pt_sequence"],
-                name="unique_shape_in_feed",
-            )
-        ]
-
-    def __str__(self):
-        return f"{self.shape_id}: {self.shape_pt_sequence}"
+        abstract = True
 
 
-class GeoShape(models.Model):
-    """Rules for drawing lines on a map to represent a transit organization's routes.
-    Maps to shapes.txt in the GTFS feed.
-    """
-
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
-    shape_id = models.CharField(
-        max_length=255, help_text="Identificador único de la trayectoria."
-    )
-    geometry = models.LineStringField(
-        help_text="Trayectoria de la ruta.",
-        # dim=3, # To store 3D coordinates (x, y, z)
-    )
-    shape_name = models.CharField(max_length=255, blank=True, null=True)
-    shape_desc = models.TextField(blank=True, null=True)
-    shape_from = models.CharField(max_length=255, blank=True, null=True)
-    shape_to = models.CharField(max_length=255, blank=True, null=True)
-    has_altitude = models.BooleanField(
-        help_text="Indica si la trayectoria tiene datos de altitud", default=False
-    )
-
-    class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=["feed", "shape_id"], name="unique_geoshape_in_feed"
-            )
-        ]
-
-    def __str__(self):
-        return self.shape_id
-
-
-class Trip(models.Model):
+class BaseTrip(models.Model):
     """Trips for each route. A trip is a sequence of two or more stops that occurs at specific time.
     Maps to trips.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     route_id = models.CharField(max_length=200)
-    _route = models.ForeignKey(Route, on_delete=models.CASCADE, blank=True, null=True)
     service_id = models.CharField(max_length=200)
-    _service = models.ForeignKey(
-        Calendar, on_delete=models.CASCADE, blank=True, null=True
-    )
     trip_id = models.CharField(
         max_length=255, help_text="Identificador único del viaje."
     )
@@ -483,9 +265,6 @@ class Trip(models.Model):
         max_length=255, blank=True, null=True, help_text="Identificador del bloque."
     )
     shape_id = models.CharField(max_length=255, blank=True, null=True)
-    geoshape = models.ForeignKey(
-        GeoShape, on_delete=models.SET_NULL, blank=True, null=True
-    )
     wheelchair_accessible = models.PositiveIntegerField(
         choices=((0, "No especificado"), (1, "Accesible"), (2, "No accesible")),
         help_text="¿Tiene acceso para sillas de ruedas?",
@@ -496,28 +275,15 @@ class Trip(models.Model):
     )
 
     class Meta:
-        constraints = [
-            UniqueConstraint(fields=["feed", "trip_id"], name="unique_trip_in_feed")
-        ]
-
-    def save(self, *args, **kwargs):
-        self._route = Route.objects.get(feed=self.feed, route_id=self.route_id)
-        self._service = Calendar.objects.get(feed=self.feed, service_id=self.service_id)
-        super(Trip, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return self.trip_id
+        abstract = True
 
 
-class StopTime(models.Model):
+class BaseStopTime(models.Model):
     """Times that a vehicle arrives at and departs from individual stops for each trip.
     Maps to stop_times.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     trip_id = models.CharField(max_length=200)
-    _trip = models.ForeignKey(Trip, on_delete=models.CASCADE, blank=True, null=True)
     arrival_time = models.TimeField(
         help_text="Hora de llegada a la parada.", blank=True, null=True
     )
@@ -525,7 +291,6 @@ class StopTime(models.Model):
         help_text="Hora de salida de la parada.", blank=True, null=True
     )
     stop_id = models.CharField(max_length=200)
-    _stop = models.ForeignKey(Stop, on_delete=models.CASCADE, blank=True, null=True)
     stop_sequence = models.PositiveIntegerField(
         help_text="Secuencia de la parada en el viaje."
     )
@@ -553,29 +318,14 @@ class StopTime(models.Model):
     )
 
     class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=["feed", "trip_id", "stop_sequence"],
-                name="unique_stoptime_in_feed",
-            )
-        ]
-
-    def save(self, *args, **kwargs):
-        self._trip = Trip.objects.get(feed=self.feed, trip_id=self.trip_id)
-        self._stop = Stop.objects.get(feed=self.feed, stop_id=self.stop_id)
-        super(StopTime, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.trip_id}: {self.stop_id} ({self.stop_sequence})"
+        abstract = True
 
 
-class FareAttribute(models.Model):
+class BaseFareAttribute(models.Model):
     """Rules for how to calculate the fare for a certain kind of trip.
     Maps to fare_attributes.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     fare_id = models.CharField(
         max_length=255, help_text="Identificador único de la tarifa."
     )
@@ -600,73 +350,34 @@ class FareAttribute(models.Model):
         help_text="Número de transferencias permitidas.",
     )
     agency_id = models.CharField(max_length=255, blank=True, null=True)
-    _agency = models.ForeignKey(Agency, on_delete=models.CASCADE, blank=True, null=True)
     transfer_duration = models.PositiveIntegerField(
         blank=True, null=True, help_text="Duración de la transferencia."
     )
 
     class Meta:
-        constraints = [
-            UniqueConstraint(fields=["feed", "fare_id"], name="unique_fare_in_feed")
-        ]
-
-    def save(self, *args, **kwargs):
-        if self.agency_id:
-            self._agency = Agency.objects.get(feed=self.feed, agency_id=self.agency_id)
-        super(FareAttribute, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return self.fare_id
+        abstract = True
 
 
-class FareRule(models.Model):
+class BaseFareRule(models.Model):
     """Rules for which fare to apply in a given situation.
     Maps to fare_rules.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     fare_id = models.CharField(max_length=200)
-    _fare = models.ForeignKey(
-        FareAttribute, on_delete=models.CASCADE, blank=True, null=True
-    )
     route_id = models.CharField(max_length=200)
-    _route = models.ForeignKey(Route, on_delete=models.CASCADE, blank=True, null=True)
     origin_id = models.CharField(max_length=255, blank=True, null=True)
     destination_id = models.CharField(max_length=255, blank=True, null=True)
     contains_id = models.CharField(max_length=255, blank=True, null=True)
 
     class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=[
-                    "feed",
-                    "fare_id",
-                    "route_id",
-                    "origin_id",
-                    "destination_id",
-                    "contains_id",
-                ],
-                name="unique_fare_rule_in_feed",
-            )
-        ]
-
-    def save(self, *args, **kwargs):
-        self._fare = FareAttribute.objects.get(feed=self.feed, fare_id=self.fare_id)
-        self._route = Route.objects.get(feed=self.feed, route_id=self.route_id)
-        super(FareRule, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.fare_id}: {self.route_id}"
+        abstract = True
 
 
-class FeedInfo(models.Model):
+class BaseFeedInfo(models.Model):
     """Additional information about the feed itself, including publisher, version, and expiration information.
     Maps to feed_info.txt in the GTFS feed.
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     feed_publisher_name = models.CharField(
         max_length=255, help_text="Nombre del editor del feed."
     )
@@ -699,124 +410,8 @@ class FeedInfo(models.Model):
         help_text="URL de contacto.",
     )
 
-    def __str__(self):
-        return f"{self.feed_publisher_name}: {self.feed_version}"
-
-
-# ----------------
-# Auxiliary models
-# ----------------
-
-
-class RouteStop(models.Model):
-    """Describes the sequence of stops for a route and a shape."""
-
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
-    route_id = models.CharField(max_length=200)
-    _route = models.ForeignKey(Route, on_delete=models.CASCADE, blank=True, null=True)
-    shape_id = models.CharField(max_length=200)
-    _shape = models.ForeignKey(
-        GeoShape, on_delete=models.CASCADE, blank=True, null=True
-    )
-    direction_id = models.PositiveIntegerField()
-    stop_id = models.CharField(max_length=200)
-    _stop = models.ForeignKey(Stop, on_delete=models.CASCADE, blank=True, null=True)
-    stop_sequence = models.PositiveIntegerField()
-    timepoint = models.BooleanField()
-
     class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=["feed", "route_id", "shape_id", "stop_sequence"],
-                name="unique_routestop_in_feed",
-            )
-        ]
-
-    def save(self, *args, **kwargs):
-        self._route = Route.objects.get(feed=self.feed, route_id=self.route_id)
-        self._shape = GeoShape.objects.get(feed=self.feed, shape_id=self.shape_id)
-        self._stop = Stop.objects.get(feed=self.feed, stop_id=self.stop_id)
-        super(RouteStop, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.route_id}: {self.stop_id} ({self.shape_id} {self.stop_sequence})"
-
-
-class TripDuration(models.Model):
-    """Describes the duration of a trip for a route and a service."""
-
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
-    route_id = models.CharField(max_length=200)
-    _route = models.ForeignKey(Route, on_delete=models.CASCADE, blank=True, null=True)
-    shape_id = models.CharField(max_length=200)
-    _shape = models.ForeignKey(Shape, on_delete=models.CASCADE, blank=True, null=True)
-    service_id = models.CharField(max_length=200)
-    _service = models.ForeignKey(
-        Calendar, on_delete=models.CASCADE, blank=True, null=True
-    )
-    start_time = models.TimeField()
-    end_time = models.TimeField()
-    stretch = models.PositiveIntegerField()
-    stretch_duration = models.DurationField()
-
-    class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=[
-                    "feed",
-                    "route_id",
-                    "shape_id",
-                    "service_id",
-                    "start_time",
-                    "stretch",
-                ],
-                name="unique_tripduration_in_feed",
-            )
-        ]
-
-    def save(self, *args, **kwargs):
-        self._route = Route.objects.get(feed=self.feed, route_id=self.route_id)
-        self._shape = Shape.objects.get(feed=self.feed, shape_id=self.shape_id)
-        self._service = Calendar.objects.get(feed=self.feed, service_id=self.service_id)
-        super(TripDuration, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return (
-            f"{self.route_id}: {self.service_id} ({self.start_time} - {self.end_time})"
-        )
-
-
-class TripTime(models.Model):
-    """
-    TODO: llenar cuando se hace el proceso de importación de GTFS. Este modelo se llena con los datos de stop_times.txt, con las filas donde timepoint = True.
-    """
-
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
-    trip_id = models.CharField(max_length=200)
-    _trip = models.ForeignKey(Trip, on_delete=models.CASCADE, blank=True, null=True)
-    stop_id = models.CharField(max_length=200)
-    _stop = models.ForeignKey(Stop, on_delete=models.CASCADE, blank=True, null=True)
-    stop_sequence = models.PositiveIntegerField()
-    departure_time = models.TimeField()
-
-    class Meta:
-        constraints = [
-            UniqueConstraint(
-                fields=["feed", "trip_id", "stop_id"],
-                name="unique_triptime_in_feed",
-            )
-        ]
-
-    def save(self, *args, **kwargs):
-        self._trip = Trip.objects.get(feed=self.feed, trip_id=self.trip_id)
-        self._stop = Stop.objects.get(feed=self.feed, stop_id=self.stop_id)
-        super(TripTime, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.trip_id}: {self.stop_id} ({self.departure_time})"
+        abstract = True
 
 
 # -------------
@@ -824,7 +419,7 @@ class TripTime(models.Model):
 # -------------
 
 
-class FeedMessage(models.Model):
+class BaseFeedMessage(models.Model):
     """
     Header of a GTFS Realtime FeedMessage.
 
@@ -838,29 +433,23 @@ class FeedMessage(models.Model):
     )
 
     feed_message_id = models.CharField(max_length=63, primary_key=True)
-    provider = models.ForeignKey(
-        GTFSProvider, on_delete=models.SET_NULL, blank=True, null=True
-    )
     entity_type = models.CharField(max_length=63, choices=ENTITY_TYPE_CHOICES)
     timestamp = models.DateTimeField(auto_now=True)
     incrementality = models.CharField(max_length=15)
     gtfs_realtime_version = models.CharField(max_length=15)
 
     class Meta:
+        abstract = True
         ordering = ["-timestamp"]
 
-    def __str__(self):
-        return f"{self.entity_type} ({self.timestamp})"
 
-
-class TripUpdate(models.Model):
+class BaseTripUpdate(models.Model):
     """
     GTFS Realtime TripUpdate entity v2.0 (normalized).
 
     Trip updates represent fluctuations in the timetable.
     """
 
-    id = models.BigAutoField(primary_key=True)
     entity_id = models.CharField(max_length=127)
 
     # Foreign key to FeedMessage model
@@ -890,22 +479,20 @@ class TripUpdate(models.Model):
     # Delay (int32)
     delay = models.IntegerField(blank=True, null=True)
 
-    def __str__(self):
-        return f"{self.entity_id} ({self.feed_message})"
+    class Meta:
+        abstract = True
 
 
-class StopTimeUpdate(models.Model):
+class BaseStopTimeUpdate(models.Model):
     """
     GTFS Realtime TripUpdate message v2.0 (normalized).
 
     Realtime update for arrival and/or departure events for a given stop on a trip, linked to a TripUpdate entity in a FeedMessage.
     """
 
-    id = models.BigAutoField(primary_key=True)
-
     # Foreign key to FeedMessage and TripUpdate models
-    feed_message = models.ForeignKey(FeedMessage, on_delete=models.CASCADE)
-    trip_update = models.ForeignKey(TripUpdate, on_delete=models.CASCADE)
+    feed_message = models.ForeignKey(BaseFeedMessage, on_delete=models.CASCADE)
+    trip_update = models.ForeignKey(BaseTripUpdate, on_delete=models.CASCADE)
 
     # Stop ID (string)
     stop_sequence = models.IntegerField(blank=True, null=True)
@@ -927,23 +514,22 @@ class StopTimeUpdate(models.Model):
     # ScheduleRelationship (enum)
     schedule_relationship = models.CharField(max_length=255, blank=True, null=True)
 
-    def __str__(self):
-        return f"{self.stop_id} ({self.trip_update})"
+    class Meta:
+        abstract = True
 
 
-class VehiclePosition(models.Model):
+class BaseVehiclePosition(models.Model):
     """
     GTFS Realtime VehiclePosition entity v2.0 (normalized).
 
     Vehicle position represents a few basic pieces of information about a particular vehicle on the network.
     """
 
-    id = models.BigAutoField(primary_key=True)
     entity_id = models.CharField(max_length=127)
 
     # Foreign key to FeedMessage model
     feed_message = models.ForeignKey(
-        FeedMessage, on_delete=models.CASCADE, blank=True, null=True
+        BaseFeedMessage, on_delete=models.CASCADE, blank=True, null=True
     )
 
     # TripDescriptor (message)
@@ -969,7 +555,6 @@ class VehiclePosition(models.Model):
     # Position (message)
     vehicle_position_latitude = models.FloatField(blank=True, null=True)
     vehicle_position_longitude = models.FloatField(blank=True, null=True)
-    vehicle_position_point = models.PointField(srid=4326, blank=True, null=True)
     vehicle_position_bearing = models.FloatField(blank=True, null=True)
     vehicle_position_odometer = models.FloatField(blank=True, null=True)
     vehicle_position_speed = models.FloatField(blank=True, null=True)  # (meters/second)
@@ -997,25 +582,17 @@ class VehiclePosition(models.Model):
 
     # CarriageDetails (message): not implemented
 
-    def save(self, *args, **kwargs):
-        self.vehicle_position_point = Point(
-            self.vehicle_position_longitude, self.vehicle_position_latitude
-        )
-        super(VehiclePosition, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return f"{self.entity_id} ({self.feed_message})"
+    class Meta:
+        abstract = True
 
 
-class Alert(models.Model):
+class BaseAlert(models.Model):
     """Alerts and warnings about the service.
     Maps to alerts.txt in the GTFS feed.
 
     TODO: ajustar con Alerts de GTFS Realtime
     """
 
-    id = models.BigAutoField(primary_key=True)
-    feed = models.ForeignKey(Feed, on_delete=models.CASCADE)
     alert_id = models.CharField(
         max_length=255, help_text="Identificador único de la alerta."
     )
@@ -1081,5 +658,5 @@ class Alert(models.Model):
     )
     informed_entity = models.JSONField(help_text="Entidades informadas por la alerta.")
 
-    def __str__(self):
-        return self.alert_id
+    class Meta:
+        abstract = True
